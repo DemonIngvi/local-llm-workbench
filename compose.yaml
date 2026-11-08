@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17-alpine@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac
     restart: unless-stopped
     environment:
       POSTGRES_DB: litellm
@@ -17,7 +17,7 @@ services:
       - backend
 
   litellm:
-    image: ghcr.io/berriai/litellm:main-stable
+    image: ghcr.io/berriai/litellm:main-stable@sha256:625981c83410a3ea68eb0697590a57ec1d764d634514d54fa5db0591077ee839
     command: ["--config", "/app/config.json", "--port", "4000"]
     restart: unless-stopped
     env_file: .env
@@ -37,7 +37,7 @@ services:
       - frontend
 
   mongodb:
-    image: mongo:8.0.20
+    image: mongo:8.0.20@sha256:098862b1339f031900ca66cf8fef799e616d6324fa41b9a263f2ec899552c1ef
     restart: unless-stopped
     volumes:
       - mongodb:/data/db
@@ -45,7 +45,7 @@ services:
       - backend
 
   meilisearch:
-    image: getmeili/meilisearch:v1.35.1
+    image: getmeili/meilisearch:v1.35.1@sha256:8b57fc3c7f46535ddef3828df1538465ac19d892eb57c9a10da6df0880bd5856
     restart: unless-stopped
     env_file: .env
     environment:
@@ -56,7 +56,7 @@ services:
       - backend
 
   librechat:
-    image: registry.librechat.ai/librechat-ai/librechat-dev:latest
+    image: registry.librechat.ai/librechat-ai/librechat-dev:latest@sha256:9625652b9d9ac9fbf9ff3505fc34770f822c7aa079f58d06b4e66eed2dc93aeb
     restart: unless-stopped
     env_file: .env
     environment:
@@ -83,7 +83,7 @@ services:
 
   # HTTP API для реестра задач
   task-registry:
-    image: python:3.12-alpine
+    image: python:3.12-alpine@sha256:e064671ca452259bab50e8e2c7bd896e39e9a343bb06ca25234adf6fe18d0fc7
     command: ["python3", "/app/task_registry_api.py"]
     restart: unless-stopped
     environment:
@@ -107,6 +107,7 @@ services:
     restart: "no"
     environment:
       OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-changeme}
+      TASK_REGISTRY_URL: http://task-registry:8080
     volumes:
       - workspace_data:/workspace:rw
     # Запуск только по требованию
@@ -125,6 +126,7 @@ services:
     environment:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       DEEPSEEK_BASE_URL: http://litellm:4000/v1
+      TASK_REGISTRY_URL: http://task-registry:8080
     volumes:
       - workspace_data:/workspace:rw
     # Запуск только по требованию

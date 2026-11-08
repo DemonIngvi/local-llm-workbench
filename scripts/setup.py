@@ -19,8 +19,10 @@ def init():
         return
     values = {
         'LITELLM_MASTER_KEY': 'sk-' + secrets.token_hex(32),
-        'LITELLM_OPENCODE_KEY': 'sk-' + secrets.token_hex(32),
-        'LITELLM_DEEPSEEK_KEY': 'sk-' + secrets.token_hex(32),
+        'LITELLM_OPENCODE_KEY': 'sk-opencode-' + secrets.token_hex(24),
+        'LITELLM_DEEPSEEK_KEY': 'sk-deepseek-' + secrets.token_hex(24),
+        'LITELLM_DB_PASSWORD': secrets.token_hex(16),
+        'OPENCODE_SERVER_PASSWORD': secrets.token_hex(16),
         'LM_STUDIO_API_KEY': 'not-needed',
         'LM_STUDIO_HOST_URL': 'http://localhost:1234/v1',
         'LM_STUDIO_CONTAINER_URL': 'http://host.docker.internal:1234/v1',
@@ -31,8 +33,8 @@ def init():
         'MEILI_MASTER_KEY': secrets.token_hex(32),
         'ALLOW_REGISTRATION': 'true',
         'ALLOW_EMAIL_LOGIN': 'true',
-        'DOMAIN_CLIENT': 'http://localhost:3080',
-        'DOMAIN_SERVER': 'http://localhost:3080',
+        'DOMAIN_CLIENT': 'http://localhost:3200',
+        'DOMAIN_SERVER': 'http://localhost:3200',
         'SEARCH': 'true',
     }
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL

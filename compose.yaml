@@ -1,0 +1,41 @@
+services:
+  mongodb:
+    image: mongo:8.0.20
+    restart: unless-stopped
+    volumes:
+      - mongodb:/data/db
+  meilisearch:
+    image: getmeili/meilisearch:v1.35.1
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MEILI_NO_ANALYTICS: 'true'
+    volumes:
+      - meili:/meili_data
+  librechat:
+    image: registry.librechat.ai/librechat-ai/librechat-dev:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3080
+      MONGO_URI: mongodb://mongodb:27017/LibreChat
+      MEILI_HOST: http://meilisearch:7700
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - mongodb
+      - meilisearch
+    ports:
+      - "127.0.0.1:3200:3080"
+    volumes:
+      - ./generated/librechat.yaml:/app/librechat.yaml:ro
+      - librechat_data:/app/data
+      - uploads:/app/uploads
+      - images:/app/client/public/images
+volumes:
+  mongodb:
+  meili:
+  librechat_data:
+  uploads:
+  images:

@@ -1,0 +1,23 @@
+services:
+  mock:
+    image: node:22-alpine
+    command: ["node", "/test/mock.js"]
+    volumes:
+      - ./mock.js:/test/mock.js:ro
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    command: ["--config", "/test/litellm.json", "--port", "4000"]
+    volumes:
+      - ./litellm.json:/test/litellm.json:ro
+    depends_on:
+      - mock
+  verify:
+    image: node:22-alpine
+    command: ["node", "/test/verify.js"]
+    volumes:
+      - ./verify.js:/test/verify.js:ro
+    depends_on:
+      - litellm
+networks:
+  default:
+    internal: true

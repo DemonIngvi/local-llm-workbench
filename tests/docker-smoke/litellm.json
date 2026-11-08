@@ -1,0 +1,11 @@
+{
+  "model_list": [{
+    "model_name": "test-local-model",
+    "litellm_params": {
+      "model": "openai/test-local-model",
+      "api_base": "http://mock:1234/v1",
+      "api_key": "unused"
+    }
+  }],
+  "general_settings": {"master_key": "sk-smoke-test-local-only-1234567890"}
+}

@@ -1,0 +1,14 @@
+version: 1.0.0
+cache: true
+endpoints:
+  custom:
+    - name: Local LiteLLM
+      apiKey: sk-windows-local-dev-key-1234567890abcdef
+      baseURL: http://host.docker.internal:4100/v1
+      models:
+        default:
+          - qwen2.5-coder-7b-instruct
+        fetch: true
+      titleConvo: true
+      titleModel: current_model
+      modelDisplayLabel: Local LiteLLM

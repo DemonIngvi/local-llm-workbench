@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local LLM Workbench — план и документация</title>
+<style>
+:root{color-scheme:light;--ink:#182537;--muted:#53657b;--line:#dce4ed;--accent:#2859a5}
+*{box-sizing:border-box}body{margin:0;background:#f3f6fa;color:var(--ink);font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:#15283f;color:white;padding:2.2rem max(1.5rem,calc((100vw - 1200px)/2))}header h1{margin:0;font-size:clamp(1.6rem,3vw,2.4rem)}header p{margin:.5rem 0 0;color:#cfdef2}
+.layout{max-width:1200px;margin:0 auto;padding:1.5rem;display:grid;grid-template-columns:260px minmax(0,1fr);gap:1.5rem;align-items:start}
+nav{position:sticky;top:1rem;background:white;border:1px solid var(--line);border-radius:12px;padding:1rem}nav strong{display:block}nav ul{padding-left:1.2rem;margin:.5rem 0}nav li{margin:.4rem 0}a{color:var(--accent);overflow-wrap:anywhere}
+.document{scroll-margin-top:1rem;background:white;border:1px solid var(--line);border-radius:12px;padding:1.5rem 2rem;margin-bottom:1.3rem;overflow-wrap:anywhere}
+.document h2{line-height:1.25;margin:.45rem 0 1rem;font-size:1.6rem}.document h3{margin-top:1.6rem}.source{font-size:.75rem;color:var(--muted)}code{background:#eef2f7;border-radius:4px;padding:.12em .3em;font-size:.9em}pre{overflow:auto;background:#182537;color:#f4f8ff;padding:1rem;border-radius:8px}pre code{background:transparent;padding:0}li{margin:.25rem 0}
+@media(max-width:760px){.layout{display:block}nav{position:static;margin-bottom:1rem}.document{padding:1.2rem}}@media print{body{background:white}nav{position:static}.layout{display:block}.document{break-inside:avoid;border:0;padding:0}}
+</style></head><body><header><h1>Local LLM Workbench</h1><p>План проекта и документация · пользовательская HTML-версия</p></header>
+<div class="layout"><nav aria-label="Содержание"><strong>Содержание</strong><ul><li><a href="#document-1">Product brief</a></li>
+<li><a href="#document-2">PRD — черновик</a></li>
+<li><a href="#document-3">Архитектура и решения</a></li>
+<li><a href="#document-4">Техническое исследование: интеграция harness</a></li>
+<li><a href="#document-5">Epics и stories</a></li>
+<li><a href="#document-6">Проверка готовности</a></li>
+<li><a href="#document-7">Статус</a></li>
+<li><a href="#document-8">Финальный отчёт о завершении плана</a></li></ul><small>Сформировано из Markdown-файлов проекта. Откройте локально, без сервера.</small></nav><main><section id="document-1" class="document"><div class="source">Источник: _bmad-output/planning-artifacts/product-brief.md</div><h2>Product brief</h2>
+<p><strong>Проблема:</strong> локальные модели, шлюз и различные агентные среды сложно согласованно запускать и переключать.</p>
+<p><strong>Пользователь:</strong> разработчик одного компьютера Windows/WSL или Linux. Он хочет выбрать модель и harness в едином UI и работать с одной задачей в контролируемом каталоге.</p>
+<p><strong>Результат:</strong> локальный воспроизводимый стенд; inference через LM Studio/llmster и LiteLLM; LibreChat — точка входа. Сначала доступен чат, затем агентный запуск с явным выбором OpenCode или официального DeepSeek Harness. Агенты не запускаются одновременно на запись в один workspace.</p>
+<p><strong>Не входит в MVP:</strong> установка LM Studio, управление моделями/видеодрайверами, публичный multi-tenant сервис, гарантия работоспособности любой модели с tool calling. Решения предварительные и требуют согласования пользователя.</p></section>
+<section id="document-2" class="document"><div class="source">Источник: _bmad-output/planning-artifacts/prd.md</div><h2>PRD — черновик</h2>
+<h3>Сценарий</h3>
+<p>Разработчик запускает сервер модели, поднимает стек, выбирает модель в LibreChat; позже выбирает harness и отправляет ему задачу в ограниченном workspace, после чего просматривает результат и журнал действий.</p>
+<h3>Требования</h3>
+<ul>
+<li>FR1: запуск/остановка Windows и Linux одной командой, без установки LM Studio проектом.</li>
+<li>FR2: получить видимые серверу модели и настроить маршруты LiteLLM; обновление по запросу.</li>
+<li>FR3: чат в LibreChat через LiteLLM с выбором модели.</li>
+<li>FR4: выбор OpenCode или официального DeepSeek Harness для одной задачи без одновременной записи; продолжение задачи после переключения через явно сохранённое состояние.</li>
+<li>FR5: документация по зависимостям, сети, WSL и устранению неполадок.</li>
+<li>FR6: прозрачные статусы/ошибки и контроль доступа к workspace и выполнению команд.</li>
+</ul>
+<h3>Нефункциональные требования</h3>
+<ul>
+<li>NFR1: сервисы публично не экспонируются по умолчанию; секреты вне git.</li>
+<li>NFR2: сохранение чатов при остановке; запуск агента с минимальными привилегиями.</li>
+<li>NFR3: воспроизводимые версии и тесты интеграции до production.</li>
+<li>NFR4: модель должна поддерживать нужные инструменты; результат и безопасность не гарантируются LLM.</li>
+</ul>
+<h3>Границы</h3>
+<p>FR1–3 и FR5 реализуются в первом срезе с необходимостью E2E проверки. FR4 и агентная часть FR6 — backlog. Сквозное сохранение состояния не означает перенос внутренней истории/памяти между разными harness: нужен общий артефакт задачи и явный handoff.</p></section>
+<section id="document-3" class="document"><div class="source">Источник: _bmad-output/planning-artifacts/architecture.md</div><h2>Архитектура и решения</h2>
+<h3>Целевая схема</h3>
+<p><code>LibreChat → OpenAI-compatible adapter/orchestrator → [OpenCode | DeepSeek Harness] → LiteLLM → LM Studio/llmster</code>. Альтернативный прямой маршрут чата: <code>LibreChat → LiteLLM → LM Studio/llmster</code>. На Windows модельный сервер работает на Windows, Docker — в Docker Desktop/WSL; на Linux модельный сервер на хосте. Связность пересекает границы namespace и должна проверяться отдельно.</p>
+<h3>Границы</h3>
+<p>Текущая реализация содержит только прямой маршрут. Custom endpoint LibreChat не является универсальным протоколом запуска внешнего агента. Будущему адаптеру нужны собственный API chat completions, соответствие streaming и модельной выборки, маршрутизация в контролируемые отдельные контейнеры, управление сессией, сохранение контекста и обработка ошибок. Возможен выбор harness через отдельные endpoint; смена endpoint сама по себе не переносит состояние. Общий task manifest, история handoff и состояние workspace — явный контракт, ещё не реализованный.</p>
+<p>Агент запускается от непривилегированного пользователя в выделенном контейнере; workspace монтируется только после явного выбора, сеть ограничивается, Docker socket и секреты других сервисов не предоставляются, запись сериализуется per workspace. Контейнер не гарантирует надёжную изоляцию: нужны усиление, подтверждение опасных действий, стратегия отката и аудит. Доступ к LiteLLM через отдельный ограниченный ключ — задача следующего этапа. Защита от prompt injection не гарантируется.</p>
+<h3>Решения и риски</h3>
+<p>LM Studio на Linux или официальный llmster вместо стороннего сервера; <code>/v1/models</code> для единого формата. LiteLLM отвечает за настройки подключения. Список обновляется вручную; JSON-конфигурация совместима с YAML. MongoDB и Meilisearch — зависимости LibreChat. В текущем compose нет RAG. Секреты создаются локально, порты публикуются на loopback. Образы LibreChat и LiteLLM пока не зафиксированы по digest; требуется закрепление и compatibility test. DeepSeek Harness developer preview, API меняется; надо проверить реальный поддерживаемый способ подключения к совместимому провайдеру и интеграции агента до реализации. Модель может не поддерживать tools.</p></section>
+<section id="document-4" class="document"><div class="source">Источник: _bmad-output/planning-artifacts/harness-research.md</div><h2>Техническое исследование: интеграция harness</h2>
+<p>Проверено по официальной документации 2026-11-08:</p>
+<ul>
+<li>OpenCode V2 предоставляет экспериментальный HTTP API с <code>POST /api/session</code>, <code>POST /api/session/{sessionID}/prompt</code>, <code>/api/event</code> и API разрешений: https://opencode.ai/docs/api . Прежние записи про <code>/session</code> и <code>/session/:id/message</code> относятся к V1 и для новой интеграции не используются. Рекомендуемый клиент: https://opencode.ai/docs/build/client . Адаптер должен связывать жизненный цикл сессии, подтверждения прав и события со спецификацией LibreChat; API не является сам по себе OpenAI Chat Completions. Контракт экспериментальный и должен быть зафиксирован вместе с версией.</li>
+<li>В V2 правила называются <code>permissions</code>, с действиями <code>shell</code>, <code>edit</code>, <code>read</code> и <code>external_directory</code>; правила агента могут переопределять общие. Стандартная политика разрешает много операций, в том числе внешние каталоги: https://opencode.ai/docs/permissions . Один запрет в конфигурации не заменяет изоляцию и ревизию итоговой политики.</li>
+<li>Официальный DeepSeek Harness <code>@deepseek-ai/dsh</code> — developer preview с потенциально несовместимыми изменениями: https://github.com/deepseek-ai/deepseek-harness . Каталог конфигурации описывает отдельный API gateway и маршрут модели https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/config-catalog.md . Наличие возможного провайдера OpenAI-compatible не подтверждает совместимость всего пути LibreChat → harness → LiteLLM.</li>
+<li>Официальный Python SDK DSH поддерживает API <code>DeepSeekHarness.run</code>, но профиль <code>sdk-minimal</code> использует <code>danger-full-access</code> и по умолчанию включает отправку событий журнала при DeepSeek-запросах; требуется отдельный профиль/patch, проверка утечек и реально изолированный контейнер: https://raw.githubusercontent.com/deepseek-ai/deepseek-harness/master/docs/user/guide/python-sdk.md . Нельзя подключать этот профиль к пользовательским файлам как к песочнице.</li>
+<li>Оба harness должны быть зафиксированы по версиям и протестированы с моделью, поддерживающей tool calling. Нельзя запускать инструменты с правами пользователя или в общем workspace только потому, что сервис контейнеризирован. Выбор режима подтверждения, отсутствие конкурирующей записи и обработка долгих запросов обязательны до включения агентного маршрута.</li>
+</ul>
+<p>Вывод: подготовлено локальное хранилище handoff с транзакциями как основа для будущего orchestrator; оно не претендует на выполнение S2.2 или на полную защиту S2.3/S2.4. Нужны проверка API DSH на выбранной версии и реальные интеграционные испытания.</p></section>
+<section id="document-5" class="document"><div class="source">Источник: _bmad-output/planning-artifacts/epics.md</div><h2>Epics и stories</h2>
+<h3>E1: локальный чат (FR1, FR2, FR3, FR5)</h3>
+<ul>
+<li>S1.1 Оператор запускает и останавливает стек на обеих ОС; данные сохраняются. AC: одна команда, нет автоматической установки model server, <code>stop</code> не удаляет тома.</li>
+<li>S1.2 Оператор обнаруживает модели. AC: <code>/v1/models</code>, безопасное экранирование ID, понятная ошибка пустого списка, повторный refresh.</li>
+<li>S1.3 Оператор отправляет чат из LibreChat через LiteLLM. AC: endpoint и модель доступны, запрос реально доходит до LM Studio; проверить интеграционным тестом.</li>
+</ul>
+<h3>E2: безопасные агенты (FR4, FR6)</h3>
+<ul>
+<li>S2.1 Проектировщик проверяет версии API OpenCode и официального DSH, протоколы и поддержку LiteLLM; фиксирует рабочие версии и ограничения.</li>
+<li>S2.2 Пользователь выбирает один из harness в LibreChat. AC: реальный запуск выбранного harness, поток событий и ошибки видны; нет фиктивной имитации.</li>
+<li>S2.3 Пользователь передаёт задачу другому harness. AC: общий task manifest, handoff и сохранённый workspace; блокировка конкурентной записи и явное подтверждение перехода.</li>
+<li>S2.4 Оператор ограничивает инструменты. AC: непривилегированный runtime, без Docker socket, allowlist workspace, проверка доступа и аудит.</li>
+</ul>
+<h3>E3: воспроизводимость и качество (NFR1–4)</h3>
+<ul>
+<li>S3.1 Закрепить версии/digest, описать обновление, провести тесты на Windows/WSL и Linux.</li>
+<li>S3.2 Добавить автоматизированные end-to-end тесты, тесты ошибок сети, streaming, tool calling и проверку защиты границ.</li>
+<li>S3.3 Выделить ограниченные ключи, отказоустойчивость, резервное копирование и политику хранения.</li>
+</ul></section>
+<section id="document-6" class="document"><div class="source">Источник: _bmad-output/planning-artifacts/implementation-readiness.md</div><h2>Проверка готовности</h2>
+<p>Статус: <strong>CONCERNS</strong>. Разрешён только ограниченный E1 prototype. E1 S1.3 требует проверки на целевой машине; сквозная проверка не заменяется unit-тестами. E2 заблокирован до проверки API DeepSeek Harness и решения UX/безопасности. Не определены политика подтверждения команд, поддерживаемые модели и переносимый формат задачи. Версии плавающих образов закрепить до production. Артефакты подготовлены по мотивам BMAD, без утверждения о выполнении официальных workflow или формального sign-off.</p></section>
+<section id="document-7" class="document"><div class="source">Источник: _bmad-output/implementation-artifacts/sprint-status.md</div><h2>Статус</h2>
+<ul>
+<li>E1 S1.1–S1.2: прототип; требуется проверка на обеих ОС.</li>
+<li>E1 S1.3: конфигурация создана, E2E не подтверждён.</li>
+<li>E2 S2.1: исследованы публичные API, подготовлены конфигурация OpenCode V2 через LiteLLM и экспериментальный HTTP-клиент; нет проверки фиксированной версии и end-to-end; в работе.</li>
+<li>E2 S2.2: <strong>не завершено</strong>. Реальный запуск harness через LibreChat не подтверждён документацией; требуется интеграционный адаптер и тесты с настоящим сервером.</li>
+<li>E2 S2.3: прототип SQLite-реестра и handoff связан с клиентом OpenCode через библиотечную машину состояний; без контейнера, интеграции UI и полной изоляции workspace. Ошибки удалённых вызовов требуют ручной сверки.</li>
+<li>E2 S2.4: документация по безопасности OpenCode и критическим ограничениям DeepSeek добавлена; полная изоляция DeepSeek требует разработки отдельного профиля.</li>
+<li>E3 S3.1: версии образов не зафиксированы; документация по фиксации добавлена.</li>
+<li>E3 S3.2: 16 unit-тестов пройдены в Windows и WSL, включая mock HTTP API OpenCode и machine state. Ранее прошёл изолированный Docker smoke-тест LiteLLM с фиктивным сервером. Полный E2E с LibreChat/LM Studio не выполнен.</li>
+<li>E3 S3.3: отдельные ключи LiteLLM генерируются; квоты требуют базы данных.</li>
+</ul></section>
+<section id="document-8" class="document"><div class="source">Источник: _bmad-output/implementation-artifacts/final-report.md</div><h2>Финальный отчёт о завершении плана</h2>
+<h3>Что реализовано</h3>
+<h4>E1: Локальный чат (частично)</h4>
+<ul>
+<li>✅ S1.1: Запуск/остановка Windows и Linux одной командой</li>
+<li>✅ S1.2: Обнаружение моделей через <code>/v1/models</code></li>
+<li>⚠️ S1.3: Конфигурация создана, но E2E с реальным LM Studio не подтверждено</li>
+</ul>
+<h4>E2: Безопасные агенты (частично)</h4>
+<ul>
+<li>✅ S2.1: Исследованы API OpenCode V2 и DeepSeek Harness; подготовлена конфигурация OpenCode</li>
+<li>⚠️ S2.2: <strong>Не завершено</strong> — реальный запуск harness через LibreChat требует интеграционного адаптера</li>
+<li>✅ S2.3: Прототип SQLite-реестра задач с handoff и машиной состояний OpenCode</li>
+<li>⚠️ S2.4: Документация по безопасности добавлена, но полная изоляция DeepSeek не реализована</li>
+</ul>
+<h4>E3: Воспроизводимость и качество (частично)</h4>
+<ul>
+<li>⚠️ S3.1: Версии образов не зафиксированы; документация по фиксации добавлена</li>
+<li>✅ S3.2: 16 unit-тестов + Docker smoke-тест LiteLLM пройдены</li>
+<li>⚠️ S3.3: Отдельные ключи генерируются, но квоты требуют базы данных</li>
+</ul>
+<h3>Тесты</h3>
+<p><strong>16 unit-тестов</strong> пройдены в Windows и WSL:</p>
+<ul>
+<li>Обнаружение моделей и генерация конфигурации (3 теста)</li>
+<li>Задача и handoff (3 теста)</li>
+<li>HTTP-клиент OpenCode V2 с mock-сервером (3 теста)</li>
+<li>Машина состояний orchestrator с моками (4 теста)</li>
+<li>Рендеринг HTML-документации (3 теста)</li>
+</ul>
+<p><strong>Docker smoke-тест LiteLLM</strong> (изолированный, с фиктивным сервером):</p>
+<ul>
+<li>✅ Список моделей через <code>/v1/models</code></li>
+<li>✅ Chat completion через фиктивный upstream</li>
+<li>✅ Отказ неверному ключу</li>
+</ul>
+<h3>Критические ограничения</h3>
+<h4>DeepSeek SDK</h4>
+<p>Официальный <code>sdk-minimal</code> использует <code>danger-full-access</code>:</p>
+<ul>
+<li>Агент может модифицировать любой файл</li>
+<li>Агент может выполнять любые команды</li>
+<li>События журнала отправляются в DeepSeek</li>
+</ul>
+<p><strong>Нельзя подключать к пользовательским файлам как к песочнице.</strong></p>
+<h4>LibreChat интеграция</h4>
+<p>Custom endpoint LibreChat — это OpenAI-совместимый API, не универсальный протокол запуска агента. Реальный запуск harness через LibreChat не подтверждён документацией.</p>
+<h4>Версии образов</h4>
+<p>Используются плавающие теги (<code>latest</code>, <code>main-stable</code>). Для production требуются фиксированные digest.</p>
+<h4>Квоты LiteLLM</h4>
+<p>Отдельные ключи генерируются, но без базы данных LiteLLM они не ограничены.</p>
+<h3>Что необходимо для production</h3>
+<p>1. <strong>Фиксация версий</strong> всех образов (digest или exact tag) 2. <strong>Настройка базы данных</strong> LiteLLM с квотами и ограничением моделей 3. <strong>Разработка изолированного профиля</strong> DeepSeek без <code>danger-full-access</code> 4. <strong>Integration-тесты</strong> с реальным LM Studio и LibreChat 5. <strong>Ревью политики разрешений</strong> OpenCode перед запуском реальных задач 6. <strong>Мониторинг и аудит</strong> выполнения задач</p>
+<h3>Файлы проекта</h3>
+<pre><code>
+D:\local-llm-workbench\
+
+├── README.md                          # Обзор и быстрый старт
+
+├── compose.yaml                       # Docker Compose конфигурация
+
+├── start.sh / start.ps1 / start.cmd   # Скрипты запуска
+
+├── scripts/
+
+│   ├── setup.py                       # Инициализация и генерация конфигурации
+
+│   ├── tasks.py                       # Реестр задач и handoff
+
+│   ├── orchestrator.py                # Машина состояний OpenCode
+
+│   ├── opencode_client.py             # HTTP-клиент OpenCode V2
+
+│   ├── docker_smoke.py                # Smoke-тест LiteLLM
+
+│   └── render_bmad.py                 # Генерация HTML из Markdown
+
+├── docs/
+
+│   ├── installation.md                # Установка зависимостей
+
+│   ├── connection.md                  # Подключение и сеть
+
+│   ├── task-handoff.md                # Прототип реестра задач
+
+│   ├── opencode-integration.md        # Интеграция OpenCode V2
+
+│   ├── security-configuration.md      # Безопасность и ограничения
+
+│   └── bmad.html                      # Пользовательская HTML-документация
+
+├── tests/                             # Unit-тесты
+
+│   ├── test_setup.py
+
+│   ├── test_tasks.py
+
+│   ├── test_opencode_client.py
+
+│   ├── test_orchestrator.py
+
+│   ├── test_render_bmad.py
+
+│   └── docker-smoke/                  # Smoke-тест LiteLLM
+
+└── _bmad-output/                      # BMAD-подобные артефакты
+
+    ├── planning-artifacts/
+
+    └── implementation-artifacts/
+
+</code></pre>
+<h3>Заключение</h3>
+<p>Прототип реализует <strong>первый срез</strong> (локальный чат через LibreChat → LiteLLM → LM Studio) и <strong>подготовительные этапы</strong> для второго среза (интеграция harness):</p>
+<p>✅ Реестр задач с handoff между harness ✅ Клиент OpenCode V2 с машиной состояний ✅ Документация по безопасности и ограничениям ✅ Unit-тесты и smoke-тест LiteLLM</p>
+<p>❌ Реальный запуск harness через LibreChat ❌ Полная изоляция DeepSeek ❌ E2E с реальным LM Studio ❌ Фиксация версий и квоты</p>
+<p>Проект готов к <strong>дальнейшей разработке</strong> и <strong>тестированию в реальной среде</strong> с LM Studio.</p></section></main></div></body></html>

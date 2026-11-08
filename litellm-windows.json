@@ -1,0 +1,16 @@
+{
+  "model_list": [
+    {
+      "model_name": "qwen2.5-coder-7b-instruct",
+      "litellm_params": {
+        "model": "openai/qwen2.5-coder-7b-instruct",
+        "api_base": "http://localhost:1234/v1",
+        "api_key": "not-needed"
+      }
+    }
+  ],
+  "general_settings": {
+    "master_key": "sk-windows-local-dev-key-1234567890abcdef",
+    "database_url": "postgresql://litellm:litellm_password@172.24.0.6:5432/litellm"
+  }
+}

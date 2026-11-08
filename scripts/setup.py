@@ -70,7 +70,16 @@ def configs(models):
         'model_list': [{'model_name': model, 'litellm_params': {
             'model': 'openai/' + model, 'api_base': 'os.environ/LM_STUDIO_CONTAINER_URL',
             'api_key': 'os.environ/LM_STUDIO_API_KEY'}} for model in models],
-        'general_settings': {'master_key': 'os.environ/LITELLM_MASTER_KEY'},
+        'general_settings': {
+            'master_key': 'os.environ/LITELLM_MASTER_KEY',
+            'database_url': 'os.environ/DATABASE_URL',
+            'otel_exporter': False,  # Отключаем телеметрию
+            'enable_public_model_list': False,  # Не публикуем список моделей
+        },
+        'litellm_settings': {
+            'drop_params': True,  # Удаляем неподдерживаемые параметры
+            'set_verbose': False,
+        }
     }
     librechat = {'version': '1.3.18', 'cache': False, 'endpoints': {'custom': [{
         'name': 'Local LiteLLM', 'apiKey': '${LITELLM_MASTER_KEY}',

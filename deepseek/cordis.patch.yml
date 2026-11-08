@@ -1,0 +1,38 @@
+# Изолированный профиль DeepSeek Harness без danger-full-access
+# Ограничивает доступ только к /workspace и блокирует опасные команды
+
+- id: bash
+  config:
+    allowedDirectories:
+      - /workspace
+    blockedCommands:
+      - rm
+      - sudo
+      - chmod
+      - chown
+      - curl
+      - wget
+      - nc
+      - ncat
+      - docker
+      - podman
+    timeout: 300
+
+- id: str-replace-editor
+  config:
+    allowedDirectories:
+      - /workspace
+
+- id: working-directory
+  config:
+    allowedDirectories:
+      - /workspace
+
+- id: session-log-deepseek
+  config:
+    enabled: false  # Отключаем отправку журнала в DeepSeek
+
+- id: bash-sandbox
+  config:
+    sandboxMode: workspace-write
+    workspaceWriteRoot: /workspace

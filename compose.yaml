@@ -1,9 +1,49 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: ${LITELLM_DB_PASSWORD:-litellm_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    command: ["--config", "/app/config.json", "--port", "4000"]
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://litellm:${LITELLM_DB_PASSWORD:-litellm_password}@postgres:5432/litellm
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./generated/litellm.json:/app/config.json:ro
+    ports:
+      - "127.0.0.1:4100:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+      - frontend
+
   mongodb:
     image: mongo:8.0.20
     restart: unless-stopped
     volumes:
       - mongodb:/data/db
+    networks:
+      - backend
+
   meilisearch:
     image: getmeili/meilisearch:v1.35.1
     restart: unless-stopped
@@ -12,6 +52,9 @@ services:
       MEILI_NO_ANALYTICS: 'true'
     volumes:
       - meili:/meili_data
+    networks:
+      - backend
+
   librechat:
     image: registry.librechat.ai/librechat-ai/librechat-dev:latest
     restart: unless-stopped
@@ -26,6 +69,7 @@ services:
     depends_on:
       - mongodb
       - meilisearch
+      - litellm
     ports:
       - "127.0.0.1:3200:3080"
     volumes:
@@ -33,9 +77,73 @@ services:
       - librechat_data:/app/data
       - uploads:/app/uploads
       - images:/app/client/public/images
+    networks:
+      - frontend
+      - backend
+
+  # HTTP API для реестра задач
+  task-registry:
+    image: python:3.12-alpine
+    command: ["python3", "/app/task_registry_api.py"]
+    restart: unless-stopped
+    environment:
+      TASK_REGISTRY_PORT: '8080'
+    volumes:
+      - ./scripts/task_registry_api.py:/app/task_registry_api.py:ro
+      - ./scripts/tasks.py:/app/tasks.py:ro
+      - ./scripts/orchestrator.py:/app/orchestrator.py:ro
+      - ./data:/app/data
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - backend
+
+  # OpenCode контейнер с изоляцией
+  # Запускается по требованию через orchestrator
+  opencode:
+    build:
+      context: ./opencode
+      dockerfile: Dockerfile
+    restart: "no"
+    environment:
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:-changeme}
+    volumes:
+      - workspace_data:/workspace:rw
+    # Запуск только по требованию
+    profiles:
+      - on-demand
+    networks:
+      - backend
+
+  # DeepSeek контейнер с изолированным профилем
+  # Запускается по требованию через orchestrator
+  deepseek:
+    build:
+      context: ./deepseek
+      dockerfile: Dockerfile
+    restart: "no"
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: http://litellm:4000/v1
+    volumes:
+      - workspace_data:/workspace:rw
+    # Запуск только по требованию
+    profiles:
+      - on-demand
+    networks:
+      - backend
+
 volumes:
+  postgres_data:
   mongodb:
   meili:
   librechat_data:
   uploads:
   images:
+  workspace_data:
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge

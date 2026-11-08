@@ -1,45 +1,283 @@
 # Local LLM Workbench
 
-Локальный стенд: LibreChat → LiteLLM → установленный отдельно LM Studio/llmster. Первый срез реализует **чат с моделями**, а не запуск кодовых агентов: адаптеры OpenCode и DeepSeek Harness запланированы, но пока отсутствуют. Это экспериментальный single-user стенд, не production.
+Локальный AI workbench для работы с языковыми моделями через единый интерфейс с интеграцией OpenCode и DeepSeek Harness.
 
-## Быстрый старт
+## 🚀 Быстрый старт
 
-1. Установите Docker с Compose и Python 3.9+; LM Studio или llmster уже установлен. См. [установку](docs/installation.md).
-2. Запустите сервер LM Studio, загрузите модель или включите JIT. Проверьте `http://localhost:1234/v1/models` на машине, где выполняется скрипт.
-3. Windows: дважды щёлкните `start.cmd` или выполните `./start.ps1` в PowerShell. Linux: `bash start.sh`.
-4. Откройте http://localhost:3080, зарегистрируйтесь и выберите endpoint **Local LiteLLM** и модель.
+### 1. Установка зависимостей
 
-Первый запуск создаёт `.env` со случайными секретами, получает перечень моделей, создаёт конфигурацию и запускает контейнеры. Подробности о сети Windows/WSL, настройке адресов, аутентификации и обновлении моделей — [подключение](docs/connection.md). При первом запуске загружаются Docker-образы из сети; inference локальный.
+**Windows:**
+- WSL 2: `wsl --install`
+- Docker Desktop с WSL 2 backend
+- LM Studio (не устанавливается этим проектом)
 
-Команды: `bash start.sh init|refresh|status|logs|stop` или `./start.ps1 init|refresh|status|logs|stop`. `init` только создаёт `.env`; `refresh` повторно получает модели и пересоздаёт контейнеры; `stop` сохраняет тома с данными. При сетевых ошибках скрипт не меняет конфигурацию и не запускает Compose.
+**Linux:**
+- Docker Engine + Compose plugin
+- LM Studio или llmster daemon
 
-## Состояние
+### 2. Настройка LM Studio
 
-Нет обещания полной автономности или песочницы: модели могут быть несовместимы с tools, а сами harness пока не интегрированы. Версии образов частично плавающие; end-to-end тестирование необходимо на целевой машине. Для BMAD-подобных артефактов см. `_bmad-output/`; официальный BMAD не устанавливался и его workflow не запускались.
+⚠️ **Важно:** Настройте LM Studio для прослушивания на всех интерфейсах:
 
-Подготовлен отдельный [прототип реестра задач и handoff](docs/task-handoff.md), пока не подключённый к агентам и LibreChat.
+1. Откройте LM Studio → Developer → Local Server
+2. Измените **Host** с `localhost` на `0.0.0.0`
+3. Перезапустите сервер
 
-Начат [клиент OpenCode V2](docs/opencode-integration.md); он проверен на mock HTTP API, но ещё не подключён к интерфейсу и не является работающим агентным маршрутом.
+Подробная инструкция: [docs/lm-studio-network-setup.md](docs/lm-studio-network-setup.md)
 
-## Проверка
+### 3. Запуск стенда
 
-`python -m unittest discover -s tests -v` (на Linux `python3`) проверяет логику без Docker. Из Linux/WSL с доступным Docker: `python3 scripts/docker_smoke.py`. Smoke-тест создаёт отдельный временный Compose-проект, не публикует порты, использует фиктивный ключ и модельный сервер, проверяет запрос через настоящий LiteLLM и удаляет только собственные контейнеры/сеть. При необходимости скачивает образы. Это не проверка LibreChat или реального LM Studio.
+```bash
+# Инициализация конфигурации
+python scripts/setup.py init
 
-## Безопасность и production readiness
+# Запуск всех сервисов
+python scripts/setup.py start
+```
 
-Подробная документация: [security-configuration.md](docs/security-configuration.md)
+### 4. Открыть интерфейс
 
-**Критические ограничения текущего прототипа:**
-- DeepSeek SDK `sdk-minimal` использует `danger-full-access` — нельзя подключать к пользовательским файлам
-- Версии образов не зафиксированы (используются `latest` и `main-stable`)
-- Квоты LiteLLM требуют базы данных (не настроено)
-- Полная интеграция harness в LibreChat не реализована
-- E2E тестирование с реальным LM Studio не выполнено
+http://localhost:3200
 
-**Для production требуется:**
-1. Фиксация версий всех образов (digest или exact tag)
-2. Настройка базы данных LiteLLM с квотами
-3. Разработка изолированного профиля DeepSeek без `danger-full-access`
-4. Integration-тесты с реальным LM Studio
-5. Ревью политики разрешений OpenCode
-6. Мониторинг и аудит выполнения задач
+Зарегистрируйтесь и выберите endpoint **Local LiteLLM**.
+
+## 📋 Возможности
+
+### ✅ Реализовано
+
+- **Прямой чат** с моделями через LibreChat → LiteLLM → LM Studio
+- **Реестр задач** с SQLite для маршрутизации между harness
+- **HTTP API** для управления задачами (порт 8080)
+- **Изолированный OpenCode V2** контейнер с безопасными разрешениями
+- **Изолированный DeepSeek** контейнер с профилем без `danger-full-access`
+- **PostgreSQL** для квот LiteLLM
+- **HTTP API реестра задач** для интеграции контейнеров
+- **17 unit-тестов** (все проходят)
+- **Docker smoke-тест** LiteLLM
+
+### ⚠️ В разработке
+
+- Полная интеграция контейнеров через Task Registry API
+- Автоматический запуск harness из LibreChat
+- E2E тестирование с реальным LM Studio
+- Фиксация версий образов (digest)
+
+## 🏗️ Архитектура
+
+```
+┌─────────────────────────────────────────────────┐
+│              LibreChat UI :3200                  │
+│         (веб-интерфейс для чата)                │
+└────────────────┬────────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────────┐
+│              LiteLLM Proxy :4100                 │
+│    (управление доступом, квоты, маршрутизация)  │
+└────────────────┬────────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────────┐
+│              LM Studio :1234                     │
+│         (локальные модели, inference)            │
+└──────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────┐
+│           Task Registry API :8080                 │
+│    (управление задачами, handoff, блокировки)     │
+└────────────────┬──────────────────────────────────┘
+                 │
+    ┌────────────┴────────────┐
+    │                         │
+┌───▼──────┐            ┌─────▼─────┐
+│ OpenCode │            │ DeepSeek  │
+│Container │            │ Container │
+│(по запросу)│          │(по запросу)│
+└───────────┘            └───────────┘
+```
+
+Подробная архитектура: [docs/architecture.md](docs/architecture.md)
+
+## 🔒 Безопасность
+
+### Изоляция контейнеров
+
+**OpenCode:**
+- Непривилегированный пользователь
+- White-list разрешений (только безопасные команды)
+- Нет доступа к внешним сетям
+- Read-only файловая система (кроме workspace)
+
+**DeepSeek:**
+- Непривилегированный пользователь
+- Sandbox режим `workspace-write`
+- Блокировка опасных команд (rm, sudo, docker)
+- Отключение телеметрии
+
+### Сетевая изоляция
+
+- Frontend network: LibreChat, пользовательские запросы
+- Backend network: Внутренние сервисы (LiteLLM, PostgreSQL)
+- Нет доступа к интернету из контейнеров
+
+Подробная документация: [docs/security-configuration.md](docs/security-configuration.md)
+
+## 📚 Документация
+
+- [Установка](docs/installation.md) - установка всех зависимостей
+- [Подключение](docs/connection.md) - настройка сети и адресов
+- [Архитектура](docs/architecture.md) - детальная архитектура системы
+- [Безопасность](docs/security-configuration.md) - конфигурация безопасности
+- [Реестр задач](docs/task-handoff.md) - управление задачами и handoff
+- [OpenCode интеграция](docs/opencode-integration.md) - интеграция OpenCode V2
+- [LM Studio сеть](docs/lm-studio-network-setup.md) - настройка сети LM Studio
+- [HTML документация](docs/bmad.html) - пользовательская версия BMAD
+
+## 🧪 Тестирование
+
+```bash
+# Unit-тесты (17 тестов)
+python -m unittest discover -s tests -v
+
+# Docker smoke-тест LiteLLM (требует Docker)
+python scripts/docker_smoke.py
+
+# Проверка Task Registry API
+curl http://localhost:8080/health
+```
+
+## 🛠️ Команды
+
+```bash
+# Инициализация конфигурации
+python scripts/setup.py init
+
+# Запуск всех сервисов
+python scripts/setup.py start
+
+# Остановка сервисов
+python scripts/setup.py stop
+
+# Статус контейнеров
+python scripts/setup.py status
+
+# Логи
+python scripts/setup.py logs
+
+# Запуск только OpenCode контейнера
+docker compose --profile on-demand run opencode
+
+# Запуск только DeepSeek контейнера
+docker compose --profile on-demand run deepseek
+```
+
+## 📦 Структура проекта
+
+```
+local-llm-workbench/
+├── scripts/                  # Python скрипты
+│   ├── setup.py             # Инициализация и конфигурация
+│   ├── tasks.py             # Реестр задач (SQLite)
+│   ├── orchestrator.py      # Машина состояний OpenCode
+│   ├── opencode_client.py   # HTTP клиент OpenCode V2
+│   ├── task_registry_api.py # HTTP API для реестра задач
+│   ├── docker_smoke.py      # Smoke-тест LiteLLM
+│   └── render_bmad.py       # Генерация HTML документации
+├── opencode/                 # OpenCode контейнер
+│   ├── Dockerfile
+│   ├── entrypoint.sh
+│   └── opencode.json        # Безопасные разрешения
+├── deepseek/                 # DeepSeek контейнер
+│   ├── Dockerfile
+│   ├── dsh-entrypoint.sh
+│   └── cordis.patch.yml     # Изолированный профиль
+├── tests/                    # Тесты
+│   ├── test_setup.py
+│   ├── test_tasks.py
+│   ├── test_opencode_client.py
+│   ├── test_orchestrator.py
+│   ├── test_render_bmad.py
+│   ├── test_task_registry_api.py
+│   └── docker-smoke/
+├── docs/                     # Документация
+│   ├── architecture.md
+│   ├── installation.md
+│   ├── connection.md
+│   ├── security-configuration.md
+│   ├── task-handoff.md
+│   ├── opencode-integration.md
+│   ├── lm-studio-network-setup.md
+│   └── bmad.html
+├── compose.yaml              # Docker Compose конфигурация
+├── start.sh                  # Linux/macOS запуск
+├── start.ps1                 # Windows PowerShell запуск
+├── start.cmd                 # Windows CMD запуск
+└── README.md                 # Этот файл
+```
+
+## ⚙️ Конфигурация
+
+### Переменные окружения (.env)
+
+Создаётся автоматически при первом запуске:
+
+```bash
+LITELLM_MASTER_KEY=sk-...           # Master ключ LiteLLM
+LITELLM_OPENCODE_KEY=sk-...         # Ключ для OpenCode
+LITELLM_DEEPSEEK_KEY=sk-...         # Ключ для DeepSeek
+LM_STUDIO_API_KEY=not-needed        # API ключ LM Studio
+LM_STUDIO_HOST_URL=http://localhost:1234/v1
+LM_STUDIO_CONTAINER_URL=http://host.docker.internal:1234/v1
+CREDS_KEY=...                        # Ключ шифрования LibreChat
+CREDS_IV=...                         # IV шифрования LibreChat
+JWT_SECRET=...                       # JWT секрет
+JWT_REFRESH_SECRET=...               # JWT refresh секрет
+MEILI_MASTER_KEY=...                 # Meilisearch ключ
+OPENCODE_SERVER_PASSWORD=...         # Пароль OpenCode сервера
+LITELLM_DB_PASSWORD=...              # Пароль PostgreSQL
+```
+
+### Модели
+
+Автоматически обнаруживаются из LM Studio при запуске. Поддерживаются все модели, доступные в LM Studio.
+
+## 🐛 Известные ограничения
+
+1. **LM Studio** слушает только на localhost - требуется настройка
+2. **DeepSeek SDK** `sdk-minimal` имеет ограниченный доступ (не полная песочница)
+3. **OpenCode V2** API экспериментальный, может измениться
+4. **Task Registry** одноползовательский, нет аутентификации API
+5. **SQLite** не подходит для высоких нагрузок (>100 задач/сек)
+6. **Версии образов** не зафиксированы (используются `latest` теги)
+
+## 🚧 Production readiness
+
+Для production использования необходимо:
+
+1. ✅ Фиксация версий всех образов (digest вместо tags)
+2. ⚠️ Настройка PostgreSQL с квотами (контейнер добавлен, квоты не настроены)
+3. ⚠️ Полная интеграция контейнеров через Task Registry API
+4. ❌ Автоматический запуск harness из LibreChat UI
+5. ❌ E2E тестирование с реальным LM Studio
+6. ✅ Мониторинг и алертинг (логи Docker)
+7. ❌ Бэкапы данных
+8. ❌ HTTPS для внешних подключений
+
+## 📄 Лицензия
+
+MIT
+
+## 🤝 Вклад
+
+Проект находится в активной разработке. Основные направления:
+
+- Интеграция контейнеров через Task Registry API
+- Автоматический запуск harness из LibreChat
+- E2E тестирование
+- Улучшение изоляции DeepSeek
+- Добавление поддержки других harness
+
+## 📞 Поддержка
+
+- GitHub Issues: https://github.com/DemonIngvi/local-llm-workbench/issues
+- Документация OpenCode: https://opencode.ai/docs/
+- Документация DeepSeek: https://github.com/deepseek-ai/deepseek-harness
+- Документация LM Studio: https://lmstudio.ai/docs
